@@ -16,7 +16,7 @@ var (
 
 type OnceConfig struct {
 	RedisURL    string `json:"redisUrl,omitempty"`
-	RedisURLEnv string `json:"redisURLEnv,omitempty"`
+	RedisURLEnv string `json:"redisUrlEnv,omitempty"`
 	KeyPrefix   string `json:"keyPrefix,omitempty"`
 	Timeout     int    `json:"timeout,omitempty"`
 }

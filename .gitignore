@@ -12,3 +12,4 @@ go.work
 
 config.json
 fly.toml
+.env

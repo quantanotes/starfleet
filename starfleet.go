@@ -8,7 +8,7 @@ import (
 
 type StarFleetConfig struct {
 	Middleware MiddlewareConfig `json:"middleware"`
-	Workers    WorkerPoolConfig `json:"workers"`
+	Workers    []WorkerConfig   `json:"workers"`
 }
 
 type StarFleet struct {

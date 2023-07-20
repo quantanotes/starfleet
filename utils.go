@@ -21,7 +21,7 @@ func LoadConfig(path string) (*StarFleetConfig, error) {
 	}
 	defer file.Close()
 
-	var config *StarFleetConfig
+	config := &StarFleetConfig{}
 	if err := json.NewDecoder(file).Decode(config); err != nil {
 		return nil, err
 	}
@@ -32,7 +32,7 @@ func LoadConfig(path string) (*StarFleetConfig, error) {
 func IsJsonPath(data any, path []string) bool {
 	for _, key := range path {
 		if m, ok := data.(map[string]any); ok {
-			data = m[key].(map[string]any)
+			data = m[key]
 		} else {
 			return false
 		}
