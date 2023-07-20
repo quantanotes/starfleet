@@ -16,6 +16,12 @@ func NewWorkerPool(config WorkerPoolConfig) WorkerPool {
 	}
 }
 
+func (wp *WorkerPool) Run() {
+	for _, worker := range wp.workers {
+		worker.Work()
+	}
+}
+
 func (wp *WorkerPool) Enlist(job *Job) {
 	for {
 		select {

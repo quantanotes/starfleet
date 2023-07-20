@@ -1,7 +1,10 @@
 package main
 
-import "fmt"
-
 func main() {
-	fmt.Println("hello world")
+	config, err := LoadConfig("config.json")
+	if err != nil {
+		panic(err)
+	}
+	sf := New(*config)
+	sf.Run()
 }

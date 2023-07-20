@@ -23,9 +23,11 @@ func New(config StarFleetConfig) *StarFleet {
 	}
 }
 
-func (s *StarFleet) Run() {
-	http.HandleFunc("/dashboard", s.handleDashboard)
-	http.HandleFunc("/generate", s.middleware.Middleware(s.handleGenerate))
+func (sf *StarFleet) Run() {
+	sf.workerPool.Run()
+
+	http.HandleFunc("/dashboard", sf.handleDashboard)
+	http.HandleFunc("/generate", sf.middleware.Middleware(sf.handleGenerate))
 
 	log.Info().Msg("Listening on port :8080")
 	log.Fatal().Err(http.ListenAndServe(":8080", nil))
