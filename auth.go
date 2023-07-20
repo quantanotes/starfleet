@@ -28,14 +28,14 @@ func (c *AuthConfig) defaults() {
 }
 
 type AuthMiddleware struct {
-	jwtSecretKey string
+	jwtSecretKey []byte
 	rolePath     []string
 }
 
 func NewAuthMiddleware(config AuthConfig) *AuthMiddleware {
 	config.defaults()
 	return &AuthMiddleware{
-		jwtSecretKey: config.JwtSecretKey,
+		jwtSecretKey: []byte(config.JwtSecretKey),
 		rolePath:     config.RolePath,
 	}
 }
