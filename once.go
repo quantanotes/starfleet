@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"os"
 	"time"
@@ -71,7 +72,7 @@ func (om *OnceMiddleware) Middleware(next http.Handler) http.HandlerFunc {
 
 		next.ServeHTTP(w, r)
 
-		if err := om.client.Del(ctx, key).Err(); err != nil {
+		if err := om.client.Del(context.Background(), key).Err(); err != nil {
 			log.Error().Err(err).Str("request_id", id).Msg("Failed to release lock")
 		}
 	})
