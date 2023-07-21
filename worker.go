@@ -76,7 +76,7 @@ func (w *Worker) Work() {
 }
 
 func (w *Worker) Load() float64 {
-	return float64(len(w.Jobs)+len(w.queue)) / float64(w.capacity)
+	return float64(len(w.Jobs)+len(w.queue)+int(w.running)) / float64(w.capacity)
 }
 
 func (w *Worker) Stats() WorkerStats {
