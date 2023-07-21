@@ -16,7 +16,6 @@ func (sf *StarFleet) handleGenerate(w http.ResponseWriter, r *http.Request) {
 		LogHttpErr(w, id, "Failed to read request body", err, http.StatusInternalServerError)
 		return
 	}
-	defer r.Body.Close()
 
 	ctx := r.Context()
 	job := NewJob(ctx, id, payload)

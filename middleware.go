@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
 	"time"
 
@@ -29,7 +28,6 @@ func NewMiddleware(config MiddlewareConfig) Middleware {
 		m.auth = NewAuthMiddleware(*config.Auth)
 	}
 	if config.Once != nil {
-		fmt.Println(config.Once)
 		m.once = NewOnceMiddleware(*config.Once)
 	}
 	return m
@@ -56,7 +54,13 @@ func (m *Middleware) Middleware(next http.HandlerFunc) http.HandlerFunc {
 			Str("request id", id).
 			Msg("Recieving request")
 
-		m.middleware(m.auth, m.middleware(m.once, next)).ServeHTTP(w, r)
+		if m.auth != nil {
+			next = m.auth.Middleware(next)
+		}
+		if m.once != nil {
+			next = m.once.Middleware(next)
+		}
+		next.ServeHTTP(w, r)
 
 		log.
 			Info().
@@ -68,12 +72,12 @@ func (m *Middleware) Middleware(next http.HandlerFunc) http.HandlerFunc {
 	})
 }
 
-func (m *Middleware) middleware(middleware MiddlewareInterface, next http.HandlerFunc) http.HandlerFunc {
-	if middleware != nil {
-		return middleware.Middleware(next)
-	}
-	return next
-}
+// func (m *Middleware) middleware(middleware MiddlewareInterface, next http.HandlerFunc) http.HandlerFunc {
+// 	if middleware != nil {
+// 		return middleware.Middleware(next)
+// 	}
+// 	return next
+// }
 
 func headers(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "text/event-stream")
