@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"sync/atomic"
@@ -125,16 +126,21 @@ func (w *Worker) generate(job *Job) {
 	res, err := w.prompt(job.Payload)
 	if err != nil {
 		job.Err <- err
+		return
 	}
+	defer res.Body.Close()
 
 	log.Info().Str("request id", job.Id).Str("worker host", w.host).Msg("Initiated generate request with worker")
 
 	for {
 		data := make([]byte, 1024)
-		if _, err := res.Body.Read(data); err != nil {
+		if _, err := res.Body.Read(data); err == io.EOF {
+			return
+		} else if err != nil {
 			job.Err <- err
 			return
 		}
+
 		select {
 		case <-job.Ctx.Done():
 			return
