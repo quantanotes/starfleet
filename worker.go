@@ -1,9 +1,9 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"sync/atomic"
@@ -130,23 +130,25 @@ func (w *Worker) generate(job *Job) {
 
 	log.Info().Str("request id", job.Id).Str("worker host", w.host).Msg("Initiated generate request with worker")
 
-	scanner := bufio.NewScanner(res.Body)
-	defer res.Body.Close()
-
-	for scanner.Scan() {
-		data := scanner.Text()
-		if data == "" {
-			return
-		}
-
+	for {
 		select {
-		case job.Output <- data:
-			continue
 		case <-job.Ctx.Done():
 			return
 		case <-time.After(w.timeout):
 			job.Err <- fmt.Errorf("LLM timed out after %v", w.timeout)
 			return
+		default:
+			data := make([]byte, 1024)
+			if _, err := res.Body.Read(data); err != nil && err != io.EOF {
+				job.Err <- err
+				return
+			}
+			select {
+			case job.Output <- string(data):
+				break
+			default:
+				return
+			}
 		}
 	}
 }
