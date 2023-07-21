@@ -21,7 +21,7 @@ type WorkerConfig struct {
 
 func (c *WorkerConfig) defaults() {
 	if c.Heartbeat <= 0 {
-		c.Heartbeat = 3
+		c.Heartbeat = 1
 	}
 	if c.Timeout <= 0 {
 		c.Timeout = 10
@@ -90,7 +90,7 @@ func (w *Worker) Stats() WorkerStats {
 }
 
 func (w *Worker) heartbeat() {
-	for range time.Tick(w.heartbeatT * time.Second) {
+	for range time.Tick(w.heartbeatT) {
 		alive := w.ping()
 		if w.Alive && !alive {
 			log.Error().Str("host", w.host).Msg("Worker has died")
