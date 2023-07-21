@@ -13,7 +13,7 @@ func (sf *StarFleet) handleGenerate(w http.ResponseWriter, r *http.Request) {
 
 	payload, err := io.ReadAll(r.Body)
 	if err != nil {
-		LogHttpErr(w, id, "Failed to read request body", err, http.StatusInternalServerError)
+		LogHttpErr(w, id, "Failed to read request body", err, http.StatusBadRequest)
 		return
 	}
 
@@ -21,7 +21,10 @@ func (sf *StarFleet) handleGenerate(w http.ResponseWriter, r *http.Request) {
 	job := NewJob(ctx, id, payload)
 
 	log.Info().Str("request id", id).Msg("Beginning generation job")
-	sf.workerPool.Enlist(job)
+	if err := sf.workerPool.Enlist(job); err != nil {
+		LogHttpErr(w, id, "Could not connect to LLM", nil, http.StatusServiceUnavailable)
+		return
+	}
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {

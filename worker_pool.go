@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"math/rand"
 	"strconv"
 
@@ -30,22 +31,21 @@ func (wp *WorkerPool) Run() {
 	}
 }
 
-func (wp *WorkerPool) Enlist(job *Job) {
-	for {
-		worker := wp.getWorker()
-		select {
-		case <-job.Ctx.Done():
-			return
-		case worker.Jobs <- job:
-			log.
-				Info().
-				Str("request id", job.Id).
-				Str("worker host", worker.host).
-				Msg("Allocating job to worker")
-			return
-		default:
-			continue
-		}
+func (wp *WorkerPool) Enlist(job *Job) error {
+	worker := wp.getWorker()
+	if worker == nil {
+		return fmt.Errorf("could not connect to live LLM server")
+	}
+	select {
+	case <-job.Ctx.Done():
+		return nil
+	case worker.Jobs <- job:
+		log.
+			Info().
+			Str("request id", job.Id).
+			Str("worker host", worker.host).
+			Msg("Allocating job to worker")
+		return nil
 	}
 }
 
@@ -71,7 +71,7 @@ func (wp *WorkerPool) getWorker() *Worker {
 		worker := wp.workers[v]
 		load := worker.Load()
 
-		if i == 0 || load < minLoad {
+		if (i == 0 || load < minLoad) && worker.Alive {
 			freeWorker = worker
 			minLoad = load
 		}
