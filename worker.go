@@ -93,10 +93,10 @@ func (w *Worker) heartbeat() {
 	for range time.Tick(w.heartbeatT * time.Second) {
 		alive := w.ping()
 		if w.Alive && !alive {
-			log.Error().Str("host", w.host).Msg("worker has died")
+			log.Error().Str("host", w.host).Msg("Worker has died")
 		}
 		if !w.Alive && alive {
-			log.Error().Str("host", w.host).Msg("worker has been revived")
+			log.Error().Str("host", w.host).Msg("Worker has been revived")
 		}
 		w.Alive = alive
 	}
@@ -117,7 +117,7 @@ func (w *Worker) generate(job *Job) {
 	atomic.AddInt32(&w.running, 1)
 
 	defer func() {
-		log.Info().Str("request id", job.Id).Str("worker host", w.host).Msg("finishing generate request with worker")
+		log.Info().Str("request id", job.Id).Str("worker host", w.host).Msg("Finishing generate request with worker")
 		job.Done <- struct{}{}
 		<-w.queue
 		atomic.AddInt32(&w.running, -1)
@@ -128,7 +128,7 @@ func (w *Worker) generate(job *Job) {
 		job.Err <- err
 	}
 
-	log.Info().Str("request id", job.Id).Str("worker host", w.host).Msg("initiated generate request with worker")
+	log.Info().Str("request id", job.Id).Str("worker host", w.host).Msg("Initiated generate request with worker")
 
 	scanner := bufio.NewScanner(res.Body)
 	defer res.Body.Close()

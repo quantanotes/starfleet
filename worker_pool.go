@@ -41,7 +41,7 @@ func (wp *WorkerPool) Enlist(job *Job) {
 				Info().
 				Str("request id", job.Id).
 				Str("worker host", worker.host).
-				Msg("allocating job to worker")
+				Msg("Allocating job to worker")
 			return
 		default:
 			continue
