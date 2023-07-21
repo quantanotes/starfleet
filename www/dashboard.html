@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <script src="https://unpkg.com/htmx.org@1.9.3"></script>
+</head>
+
+<body>
+    <h1>Quanta Starfleet Dashboard</h1>
+    <table>
+        <tr>
+            <th>Alias</th>
+            <th>Alive</th>
+            <th>Capacity</th>
+            <th>Queued</th>
+            <th>Running</th>
+        </tr>
+       <tbody hx-get="/dashboard-stats" hx-trigger="load, every 1s"></tbody> 
+    </table>
+</body>
+
+</html>

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -12,8 +13,8 @@ type MiddlewareInterface interface {
 }
 
 type MiddlewareConfig struct {
-	Auth AuthConfig `json:"auth"`
-	Once OnceConfig `json:"once"`
+	Auth *AuthConfig `json:"auth,omitempty"`
+	Once *OnceConfig `json:"once,omitempty"`
 }
 
 type Middleware struct {
@@ -22,10 +23,16 @@ type Middleware struct {
 }
 
 func NewMiddleware(config MiddlewareConfig) Middleware {
-	return Middleware{
-		auth: NewAuthMiddleware(config.Auth),
-		once: NewOnceMiddleware(config.Once),
+	m := Middleware{}
+	// TODO: Refactor such that this can be handled in middleware's constructors
+	if config.Auth != nil {
+		m.auth = NewAuthMiddleware(*config.Auth)
 	}
+	if config.Once != nil {
+		fmt.Println(config.Once)
+		m.once = NewOnceMiddleware(*config.Once)
+	}
+	return m
 }
 
 func (m *Middleware) Middleware(next http.HandlerFunc) http.HandlerFunc {

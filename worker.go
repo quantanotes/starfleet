@@ -1,11 +1,15 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"net/http"
 	"net/url"
+	"sync/atomic"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 type WorkerConfig struct {
@@ -24,12 +28,21 @@ func (c *WorkerConfig) defaults() {
 	}
 }
 
+type WorkerStats struct {
+	Host     string
+	Alive    bool
+	Capacity int
+	Queued   int
+	Running  int
+}
+
 type Worker struct {
 	Alive      bool
 	Jobs       chan *Job
 	queue      chan struct{}
 	host       string
 	capacity   int
+	running    int32
 	client     http.Client
 	heartbeatT time.Duration
 	timeout    time.Duration
@@ -39,10 +52,11 @@ func NewWorker(config WorkerConfig) *Worker {
 	config.defaults()
 	return &Worker{
 		Alive:      true,
-		Jobs:       make(chan *Job, config.Capacity),
+		Jobs:       make(chan *Job, config.Capacity*2),
 		queue:      make(chan struct{}, config.Capacity),
 		host:       config.Host,
 		capacity:   config.Capacity,
+		running:    0,
 		client:     http.Client{},
 		heartbeatT: time.Duration(config.Heartbeat) * time.Second,
 		timeout:    time.Duration(config.Timeout) * time.Second,
@@ -58,22 +72,39 @@ func (w *Worker) Work() {
 			continue
 		}
 		go w.generate(job)
-		<-w.Jobs
 	}
 }
 
 func (w *Worker) Load() float64 {
-	return float64(len(w.Jobs)) / float64(w.capacity)
+	return float64(len(w.Jobs)+len(w.queue)) / float64(w.capacity)
+}
+
+func (w *Worker) Stats() WorkerStats {
+	return WorkerStats{
+		Host:     w.host,
+		Capacity: w.capacity,
+		Alive:    w.Alive,
+		Queued:   len(w.Jobs) + len(w.queue) - int(w.running),
+		Running:  int(w.running),
+	}
 }
 
 func (w *Worker) heartbeat() {
 	for range time.Tick(w.heartbeatT * time.Second) {
-		w.Alive = w.ping()
+		alive := w.ping()
+		if w.Alive && !alive {
+			log.Error().Str("host", w.host).Msg("worker has died")
+		}
+		if !w.Alive && alive {
+			log.Error().Str("host", w.host).Msg("worker has been revived")
+		}
+		w.Alive = alive
 	}
 }
 
 func (w *Worker) ping() bool {
-	resp, err := w.client.Get(w.host)
+	client := http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get(w.host)
 	if err != nil {
 		return false
 	}
@@ -83,10 +114,13 @@ func (w *Worker) ping() bool {
 
 func (w *Worker) generate(job *Job) {
 	w.queue <- struct{}{}
+	atomic.AddInt32(&w.running, 1)
 
 	defer func() {
+		log.Info().Str("request id", job.Id).Str("worker host", w.host).Msg("finishing generate request with worker")
 		job.Done <- struct{}{}
 		<-w.queue
+		atomic.AddInt32(&w.running, -1)
 	}()
 
 	res, err := w.prompt(job.Payload)
@@ -94,27 +128,25 @@ func (w *Worker) generate(job *Job) {
 		job.Err <- err
 	}
 
-	for {
+	log.Info().Str("request id", job.Id).Str("worker host", w.host).Msg("initiated generate request with worker")
+
+	scanner := bufio.NewScanner(res.Body)
+	defer res.Body.Close()
+
+	for scanner.Scan() {
+		data := scanner.Text()
+		if data == "" {
+			return
+		}
+
 		select {
+		case job.Output <- data:
+			continue
 		case <-job.Ctx.Done():
 			return
 		case <-time.After(w.timeout):
-			job.Err <- fmt.Errorf("LLM timed out after %v", 10)
+			job.Err <- fmt.Errorf("LLM timed out after %v", w.timeout)
 			return
-		default:
-			data := make([]byte, 1024)
-			_, err := res.Body.Read(data)
-			if err != nil {
-				job.Err <- err
-				return
-			}
-
-			select {
-			case job.Output <- string(data):
-				break
-			default:
-				return
-			}
 		}
 	}
 }

@@ -1,0 +1,9 @@
+{{ range . }}
+<tr>
+    <td>{{ .Host }}</td>
+    <td>{{ .Alive }}</td>
+    <td>{{ .Capacity }}</td>
+    <td>{{ .Queued }}</td>
+    <td>{{ .Running }}</td>
+</tr>
+{{ end }}

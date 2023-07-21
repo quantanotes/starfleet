@@ -1,6 +1,14 @@
 package main
 
+import (
+	"math/rand"
+	"strconv"
+
+	"github.com/rs/zerolog/log"
+)
+
 type WorkerPoolConfig []WorkerConfig
+type WorkerPoolStats []WorkerStats
 
 type WorkerPool struct {
 	workers []*Worker
@@ -24,10 +32,16 @@ func (wp *WorkerPool) Run() {
 
 func (wp *WorkerPool) Enlist(job *Job) {
 	for {
+		worker := wp.getWorker()
 		select {
 		case <-job.Ctx.Done():
 			return
-		case wp.getWorker().Jobs <- job:
+		case worker.Jobs <- job:
+			log.
+				Info().
+				Str("request id", job.Id).
+				Str("worker host", worker.host).
+				Msg("allocating job to worker")
 			return
 		default:
 			continue
@@ -35,19 +49,33 @@ func (wp *WorkerPool) Enlist(job *Job) {
 	}
 }
 
+func (wp *WorkerPool) Stats() WorkerPoolStats {
+	stats := make(WorkerPoolStats, len(wp.workers))
+	for i, w := range wp.workers {
+		stats[i] = w.Stats()
+		stats[i].Host = strconv.Itoa(i) // Temporary until dashboard security is implemented
+	}
+	return stats
+}
+
 func (wp *WorkerPool) getWorker() *Worker {
 	if len(wp.workers) == 0 {
 		return nil
 	}
 
-	freeWorker := wp.workers[0]
-	minLoad := freeWorker.Load()
-	for _, worker := range wp.workers[1:] {
+	var freeWorker *Worker
+	var minLoad float64
+
+	perm := rand.Perm(len(wp.workers))
+	for i, v := range perm {
+		worker := wp.workers[v]
 		load := worker.Load()
-		if load < minLoad {
+
+		if i == 0 || load < minLoad {
 			freeWorker = worker
 			minLoad = load
 		}
 	}
+
 	return freeWorker
 }
