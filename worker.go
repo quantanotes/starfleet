@@ -37,38 +37,41 @@ type WorkerStats struct {
 }
 
 type Worker struct {
-	Alive      bool
-	Jobs       chan *Job
-	queue      chan struct{}
-	host       string
-	capacity   int
-	running    int32
-	client     http.Client
-	heartbeatT time.Duration
-	timeout    time.Duration
+	Alive     bool
+	Jobs      chan *Job
+	queue     Queue
+	host      string
+	capacity  int
+	running   int32
+	client    http.Client
+	heartbeat time.Duration
+	timeout   time.Duration
 }
 
 func NewWorker(config WorkerConfig) *Worker {
 	config.defaults()
 	return &Worker{
-		Alive:      true,
-		Jobs:       make(chan *Job, config.Capacity*2),
-		queue:      make(chan struct{}, config.Capacity),
-		host:       config.Host,
-		capacity:   config.Capacity,
-		running:    0,
-		client:     http.Client{},
-		heartbeatT: time.Duration(config.Heartbeat) * time.Second,
-		timeout:    time.Duration(config.Timeout) * time.Second,
+		Alive:     true,
+		Jobs:      make(chan *Job, config.Capacity*2),
+		queue:     NewQueue(config.Capacity),
+		host:      config.Host,
+		capacity:  config.Capacity,
+		running:   0,
+		client:    http.Client{},
+		heartbeat: time.Duration(config.Heartbeat) * time.Second,
+		timeout:   time.Duration(config.Timeout) * time.Second,
 	}
 }
 
 func (w *Worker) Work() {
-	go w.heartbeat()
+	go w.doHearbeat()
 	for job := range w.Jobs {
 		if !w.Alive {
 			job.Err <- fmt.Errorf("LLM became unresponsive")
-			job.Done <- struct{}{}
+			select {
+			case job.Done <- struct{}{}:
+			default:
+			}
 			continue
 		}
 		go w.generate(job)
@@ -76,7 +79,7 @@ func (w *Worker) Work() {
 }
 
 func (w *Worker) Load() float64 {
-	return float64(len(w.Jobs)+len(w.queue)+int(w.running)) / float64(w.capacity)
+	return float64(len(w.Jobs)+w.queue.Size()+int(w.running)) / float64(w.capacity)
 }
 
 func (w *Worker) Stats() WorkerStats {
@@ -84,13 +87,13 @@ func (w *Worker) Stats() WorkerStats {
 		Host:     w.host,
 		Capacity: w.capacity,
 		Alive:    w.Alive,
-		Queued:   len(w.Jobs) + len(w.queue) - int(w.running),
+		Queued:   len(w.Jobs) + w.queue.Size(),
 		Running:  int(w.running),
 	}
 }
 
-func (w *Worker) heartbeat() {
-	for range time.Tick(w.heartbeatT) {
+func (w *Worker) doHearbeat() {
+	for range time.Tick(w.heartbeat) {
 		alive := w.ping()
 		if w.Alive && !alive {
 			log.Error().Str("host", w.host).Msg("Worker has died")
@@ -113,13 +116,22 @@ func (w *Worker) ping() bool {
 }
 
 func (w *Worker) generate(job *Job) {
-	w.queue <- struct{}{}
+	w.queue.Wait(job.Ctx, job.Id)
 	atomic.AddInt32(&w.running, 1)
+
+	select {
+	case <-job.Ctx.Done():
+		return
+	default:
+	}
 
 	defer func() {
 		log.Info().Str("request id", job.Id).Str("worker host", w.host).Msg("Finishing generate request with worker")
-		job.Done <- struct{}{}
-		<-w.queue
+		select {
+		case job.Done <- struct{}{}:
+		default:
+		}
+		w.queue.Release(job.Id)
 		atomic.AddInt32(&w.running, -1)
 	}()
 
