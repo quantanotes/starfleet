@@ -59,7 +59,7 @@ func (om *OnceMiddleware) Middleware(next http.Handler) http.HandlerFunc {
 		id := r.Header.Get("X-Request-ID")
 		key := om.prefix + id
 
-		lock := om.client.SetNX(ctx, key, "_", om.timeout)
+		lock := om.client.SetNX(ctx, key, "-", om.timeout)
 		if err := lock.Err(); err != nil {
 			LogHttpErr(w, id, "Failed to access cache", err, http.StatusInternalServerError)
 			return

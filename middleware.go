@@ -17,23 +17,25 @@ type MiddlewareConfig struct {
 }
 
 type Middleware struct {
-	auth *AuthMiddleware
-	once *OnceMiddleware
+	middlewares []MiddlewareInterface
 }
 
 func NewMiddleware(config MiddlewareConfig) Middleware {
 	m := Middleware{}
-	// TODO: Refactor such that this can be handled in middleware's constructors
 	if config.Auth != nil {
-		m.auth = NewAuthMiddleware(*config.Auth)
+		m.middlewares = append(m.middlewares, NewAuthMiddleware(*config.Auth))
 	}
 	if config.Once != nil {
-		m.once = NewOnceMiddleware(*config.Once)
+		m.middlewares = append(m.middlewares, NewOnceMiddleware(*config.Once))
 	}
 	return m
 }
 
 func (m *Middleware) Middleware(next http.HandlerFunc) http.HandlerFunc {
+	for _, middleware := range m.middlewares {
+		next = middleware.Middleware(next)
+	}
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		headers(w)
 
@@ -54,12 +56,6 @@ func (m *Middleware) Middleware(next http.HandlerFunc) http.HandlerFunc {
 			Str("request id", id).
 			Msg("Recieving request")
 
-		if m.auth != nil {
-			next = m.auth.Middleware(next)
-		}
-		if m.once != nil {
-			next = m.once.Middleware(next)
-		}
 		next.ServeHTTP(w, r)
 
 		log.
