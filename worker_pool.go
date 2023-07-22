@@ -8,8 +8,10 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type WorkerPoolConfig []WorkerConfig
-type WorkerPoolStats []WorkerStats
+type (
+	WorkerPoolConfig []WorkerConfig
+	WorkerPoolStats  []WorkerStats
+)
 
 type WorkerPool struct {
 	workers []*Worker

@@ -30,18 +30,18 @@ func (q *Queue) Wait(ctx context.Context, id string) {
 	atomic.AddInt32(&q.size, 1)
 	defer atomic.AddInt32(&q.size, -1)
 
+	go func() {
+		<-ctx.Done()
+		if _, ok := q.ids.Load(id); ok {
+			<-q.queue
+		}
+	}()
+
 	select {
 	case <-ctx.Done():
 		return
 	case q.queue <- struct{}{}:
 		q.ids.Store(id, struct{}{})
 		return
-	}
-}
-
-func (q *Queue) Release(id string) {
-	if _, ok := q.ids.Load(id); ok {
-		q.ids.Delete(id)
-		<-q.queue
 	}
 }

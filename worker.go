@@ -119,21 +119,20 @@ func (w *Worker) generate(job *Job) {
 	w.queue.Wait(job.Ctx, job.Id)
 	atomic.AddInt32(&w.running, 1)
 
-	select {
-	case <-job.Ctx.Done():
-		return
-	default:
-	}
-
 	defer func() {
 		log.Info().Str("request id", job.Id).Str("worker host", w.host).Msg("Finishing generate request with worker")
 		select {
 		case job.Done <- struct{}{}:
 		default:
 		}
-		w.queue.Release(job.Id)
 		atomic.AddInt32(&w.running, -1)
 	}()
+
+	select {
+	case <-job.Ctx.Done():
+		return
+	default:
+	}
 
 	res, err := w.prompt(job.Payload)
 	if err != nil {
