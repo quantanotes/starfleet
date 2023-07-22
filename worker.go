@@ -67,7 +67,10 @@ func NewWorker(config WorkerConfig) *Worker {
 }
 
 func (w *Worker) Work() {
-	go w.doHearbeat()
+	if w.checkAlive {
+		go w.doHearbeat()
+	}
+
 	for job := range w.Jobs {
 		if !w.Alive {
 			job.Err <- fmt.Errorf("LLM became unresponsive")
