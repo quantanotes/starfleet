@@ -13,10 +13,11 @@ import (
 )
 
 type WorkerConfig struct {
-	Host      string `json:"host"`
-	Capacity  int    `json:"capacity"`
-	Heartbeat int    `json:"heartbeat,omitempty"`
-	Timeout   int    `json:"timeout,omitempty"`
+	Host       string `json:"host"`
+	Capacity   int    `json:"capacity"`
+	Heartbeat  int    `json:"heartbeat,omitempty"`
+	Timeout    int    `json:"timeout,omitempty"`
+	CheckAlive bool   `json:"checkAlive,omitempty"`
 }
 
 func (c *WorkerConfig) defaults() {
@@ -37,29 +38,31 @@ type WorkerStats struct {
 }
 
 type Worker struct {
-	Alive     bool
-	Jobs      chan *Job
-	queue     Queue
-	host      string
-	capacity  int
-	running   int32
-	client    http.Client
-	heartbeat time.Duration
-	timeout   time.Duration
+	Alive      bool
+	Jobs       chan *Job
+	queue      Queue
+	host       string
+	capacity   int
+	running    int32
+	client     http.Client
+	heartbeat  time.Duration
+	timeout    time.Duration
+	checkAlive bool
 }
 
 func NewWorker(config WorkerConfig) *Worker {
 	config.defaults()
 	return &Worker{
-		Alive:     true,
-		Jobs:      make(chan *Job, config.Capacity*2),
-		queue:     NewQueue(config.Capacity),
-		host:      config.Host,
-		capacity:  config.Capacity,
-		running:   0,
-		client:    http.Client{},
-		heartbeat: time.Duration(config.Heartbeat) * time.Second,
-		timeout:   time.Duration(config.Timeout) * time.Second,
+		Alive:      true,
+		Jobs:       make(chan *Job, config.Capacity*2),
+		queue:      NewQueue(config.Capacity),
+		host:       config.Host,
+		capacity:   config.Capacity,
+		running:    0,
+		client:     http.Client{},
+		heartbeat:  time.Duration(config.Heartbeat) * time.Second,
+		timeout:    time.Duration(config.Timeout) * time.Second,
+		checkAlive: config.CheckAlive,
 	}
 }
 
@@ -151,16 +154,17 @@ func (w *Worker) generate(job *Job) {
 			job.Err <- err
 			return
 		}
+		token := string(data)
 
 		select {
+		case job.Output <- token:
+			if token != "" {
+				continue
+			}
 		case <-job.Ctx.Done():
 			return
 		case <-time.After(w.timeout):
 			job.Err <- fmt.Errorf("LLM timed out after %v", w.timeout)
-			return
-		case job.Output <- string(data):
-			continue
-		default:
 			return
 		}
 	}
