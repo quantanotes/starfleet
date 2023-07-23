@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/rs/zerolog/log"
 )
@@ -19,6 +20,7 @@ func (sf *StarFleet) handleGenerate(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 	job := NewJob(ctx, id, payload)
+	//defer job.Close()
 
 	log.Info().Str("request id", id).Msg("Beginning generation job")
 	if err := sf.workerPool.Enlist(job); err != nil {
@@ -43,6 +45,8 @@ func (sf *StarFleet) handleGenerate(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 		case err := <-job.Err:
 			LogHttpErr(w, id, err.Error(), err, http.StatusInternalServerError)
+			return
+		case <-time.After(3 * time.Second):
 			return
 		}
 	}

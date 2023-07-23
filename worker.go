@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -32,6 +33,9 @@ func (c *WorkerConfig) defaults() {
 	if c.GenerateEndpoint == "" {
 		c.GenerateEndpoint = "/generate"
 	}
+	if c.Headers == nil {
+		c.Headers = make(map[string]string)
+	}
 }
 
 type WorkerStats struct {
@@ -40,19 +44,25 @@ type WorkerStats struct {
 	Capacity int
 	Queued   int
 	Running  int
+	Requests int
+	Finished int
 }
 
 type Worker struct {
-	Alive            bool
-	Jobs             chan *Job
-	queue            Queue
-	host             string
-	capacity         int
-	running          int32
-	client           http.Client
-	heartbeat        time.Duration
-	timeout          time.Duration
-	checkAlive       bool
+	Alive bool
+	Jobs  chan *Job
+	host  string
+	queue Queue
+
+	capacity int
+	running  int32
+	requests int32
+	finished int32
+
+	heartbeat  time.Duration
+	timeout    time.Duration
+	checkAlive bool
+
 	headers          map[string]string
 	generateEndpoint string
 }
@@ -62,11 +72,12 @@ func NewWorker(config WorkerConfig) *Worker {
 	return &Worker{
 		Alive:            true,
 		Jobs:             make(chan *Job, config.Capacity*2),
-		queue:            NewQueue(config.Capacity),
 		host:             config.Host,
+		queue:            NewQueue(config.Capacity),
 		capacity:         config.Capacity,
 		running:          0,
-		client:           http.Client{},
+		requests:         0,
+		finished:         0,
 		heartbeat:        time.Duration(config.Heartbeat) * time.Second,
 		timeout:          time.Duration(config.Timeout) * time.Second,
 		checkAlive:       config.CheckAlive,
@@ -104,6 +115,8 @@ func (w *Worker) Stats() WorkerStats {
 		Alive:    w.Alive,
 		Queued:   len(w.Jobs) + w.queue.Size(),
 		Running:  int(w.running),
+		Requests: int(w.requests),
+		Finished: int(w.finished),
 	}
 }
 
@@ -131,6 +144,7 @@ func (w *Worker) ping() bool {
 }
 
 func (w *Worker) generate(job *Job) {
+	atomic.AddInt32(&w.requests, 1)
 	w.queue.Wait(job.Ctx, job.Id)
 	atomic.AddInt32(&w.running, 1)
 
@@ -141,6 +155,7 @@ func (w *Worker) generate(job *Job) {
 		default:
 		}
 		atomic.AddInt32(&w.running, -1)
+		atomic.AddInt32(&w.finished, 1)
 	}()
 
 	select {
@@ -149,9 +164,10 @@ func (w *Worker) generate(job *Job) {
 	default:
 	}
 
-	res, err := w.prompt(job.Payload)
+	res, err := w.prompt(job.Ctx, job.Payload)
 	if err != nil {
-		job.Err <- err
+		//lint:ignore ST1005 frontend error
+		job.Err <- fmt.Errorf("Error prompting LLM")
 		return
 	}
 	defer res.Body.Close()
@@ -163,7 +179,8 @@ func (w *Worker) generate(job *Job) {
 		if _, err := res.Body.Read(data); err == io.EOF {
 			return
 		} else if err != nil {
-			job.Err <- err
+			//lint:ignore ST1005 frontend error
+			job.Err <- fmt.Errorf("Error reading tokens from LLM")
 			return
 		}
 		token := string(data)
@@ -178,12 +195,17 @@ func (w *Worker) generate(job *Job) {
 		case <-time.After(w.timeout):
 			job.Err <- fmt.Errorf("LLM timed out after %v", w.timeout)
 			return
+		default:
+			continue
 		}
 	}
 }
 
-func (w *Worker) prompt(payload []byte) (*http.Response, error) {
-	path, _ := url.JoinPath(w.host, "/generate")
+func (w *Worker) prompt(ctx context.Context, payload []byte) (*http.Response, error) {
+	path, err := url.JoinPath(w.host, w.generateEndpoint)
+	if err != nil {
+		return nil, err
+	}
 	req, err := http.NewRequest("POST", path, bytes.NewBuffer(payload))
 	if err != nil {
 		return nil, err
@@ -197,5 +219,5 @@ func (w *Worker) prompt(payload []byte) (*http.Response, error) {
 		req.Header.Set(h, v)
 	}
 
-	return w.client.Do(req)
+	return http.DefaultClient.Do(req.WithContext(ctx))
 }

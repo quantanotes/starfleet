@@ -25,3 +25,10 @@ func (sf *StarFleet) handleDashboardStats(w http.ResponseWriter, r *http.Request
 		http.Error(w, "", http.StatusInternalServerError)
 	}
 }
+
+func (sf *StarFleet) handleDashboardRequestCounter(w http.ResponseWriter, r *http.Request) {
+	tmpl, _ := template.ParseFiles("www/request-counter.html")
+	if err := tmpl.Execute(w, sf.requestCounter.Stats()); err != nil {
+		http.Error(w, "", http.StatusInternalServerError)
+	}
+}

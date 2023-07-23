@@ -10,6 +10,6 @@
 
 go.work
 
-config.json
+*config.json
 fly.toml
 .env

@@ -14,8 +14,11 @@
             <th>Capacity</th>
             <th>Queued</th>
             <th>Running</th>
+            <th>Requests</th>
+            <th>Finished</th>
         </tr>
-       <tbody hx-get="/dashboard-stats" hx-trigger="load, every 1s"></tbody> 
+        <tbody hx-get="/dashboard-stats" hx-trigger="load, every 1s"></tbody>
+        <div tbody hx-get="/dashboard-request-counter" hx-trigger="load, every 1s"></div>
     </table>
 </body>
 

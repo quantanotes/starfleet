@@ -18,6 +18,12 @@ func NewJob(ctx context.Context, id string, payload []byte) *Job {
 		Payload: payload,
 		Output:  make(chan string, 100),
 		Done:    make(chan struct{}),
-		Err:     make(chan error),
+		Err:     make(chan error, 10),
 	}
+}
+
+func (j *Job) Close() {
+	close(j.Output)
+	close(j.Err)
+	close(j.Done)
 }
