@@ -13,11 +13,13 @@ import (
 )
 
 type WorkerConfig struct {
-	Host       string `json:"host"`
-	Capacity   int    `json:"capacity"`
-	Heartbeat  int    `json:"heartbeat,omitempty"`
-	Timeout    int    `json:"timeout,omitempty"`
-	CheckAlive bool   `json:"checkAlive,omitempty"`
+	Host             string            `json:"host"`
+	Capacity         int               `json:"capacity"`
+	Heartbeat        int               `json:"heartbeat,omitempty"`
+	Timeout          int               `json:"timeout,omitempty"`
+	CheckAlive       bool              `json:"checkAlive,omitempty"`
+	Headers          map[string]string `json:"headers,omitempty"`
+	GenerateEndpoint string            `json:"generateEndpoint,omitempty"`
 }
 
 func (c *WorkerConfig) defaults() {
@@ -26,6 +28,9 @@ func (c *WorkerConfig) defaults() {
 	}
 	if c.Timeout <= 0 {
 		c.Timeout = 10
+	}
+	if c.GenerateEndpoint == "" {
+		c.GenerateEndpoint = "/generate"
 	}
 }
 
@@ -38,31 +43,35 @@ type WorkerStats struct {
 }
 
 type Worker struct {
-	Alive      bool
-	Jobs       chan *Job
-	queue      Queue
-	host       string
-	capacity   int
-	running    int32
-	client     http.Client
-	heartbeat  time.Duration
-	timeout    time.Duration
-	checkAlive bool
+	Alive            bool
+	Jobs             chan *Job
+	queue            Queue
+	host             string
+	capacity         int
+	running          int32
+	client           http.Client
+	heartbeat        time.Duration
+	timeout          time.Duration
+	checkAlive       bool
+	headers          map[string]string
+	generateEndpoint string
 }
 
 func NewWorker(config WorkerConfig) *Worker {
 	config.defaults()
 	return &Worker{
-		Alive:      true,
-		Jobs:       make(chan *Job, config.Capacity*2),
-		queue:      NewQueue(config.Capacity),
-		host:       config.Host,
-		capacity:   config.Capacity,
-		running:    0,
-		client:     http.Client{},
-		heartbeat:  time.Duration(config.Heartbeat) * time.Second,
-		timeout:    time.Duration(config.Timeout) * time.Second,
-		checkAlive: config.CheckAlive,
+		Alive:            true,
+		Jobs:             make(chan *Job, config.Capacity*2),
+		queue:            NewQueue(config.Capacity),
+		host:             config.Host,
+		capacity:         config.Capacity,
+		running:          0,
+		client:           http.Client{},
+		heartbeat:        time.Duration(config.Heartbeat) * time.Second,
+		timeout:          time.Duration(config.Timeout) * time.Second,
+		checkAlive:       config.CheckAlive,
+		headers:          config.Headers,
+		generateEndpoint: config.GenerateEndpoint,
 	}
 }
 
@@ -183,6 +192,10 @@ func (w *Worker) prompt(payload []byte) (*http.Response, error) {
 	req.Header.Set("Cache-Control", "no-cache")
 	req.Header.Set("Accept", "text/event-stream")
 	req.Header.Set("Connection", "keep-alive")
+
+	for h, v := range w.headers {
+		req.Header.Set(h, v)
+	}
 
 	return w.client.Do(req)
 }
