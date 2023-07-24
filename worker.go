@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,6 +11,12 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
+)
+
+const (
+	workerDefaultHeartbeat  = 1
+	workerDefaultTimeout    = 10
+	workerDefaultMaxRetries = 5
 )
 
 type WorkerState int
@@ -26,15 +31,14 @@ type WorkerConfig struct {
 	Restart          bool              `json:"restart,omitempty"`
 	Headers          map[string]string `json:"headers,omitempty"`
 	GenerateEndpoint string            `json:"generateEndpoint,omitempty"`
-	WithBatch        bool              `json:"withBatch,omitempty"`
 }
 
 func (c *WorkerConfig) defaults() {
 	if c.Heartbeat <= 0 {
-		c.Heartbeat = 1
+		c.Heartbeat = workerDefaultHeartbeat
 	}
 	if c.Timeout <= 0 {
-		c.Timeout = 10
+		c.Timeout = workerDefaultTimeout
 	}
 	if c.GenerateEndpoint == "" {
 		c.GenerateEndpoint = "/generate"
@@ -83,8 +87,6 @@ type Worker struct {
 
 	headers          map[string]string
 	generateEndpoint string
-
-	withBatch bool
 }
 
 func NewWorker(config WorkerConfig) *Worker {
@@ -108,7 +110,6 @@ func NewWorker(config WorkerConfig) *Worker {
 		checkAlive:       config.CheckAlive,
 		headers:          config.Headers,
 		generateEndpoint: config.GenerateEndpoint,
-		withBatch:        config.WithBatch,
 	}
 }
 
@@ -203,7 +204,7 @@ func (w *Worker) generate(job *Job) {
 			w.countSuccess()
 		}
 
-		if w.failCount >= int32(w.maxRetries) {
+		if w.failCount >= int32(w.maxRetries) && w.maxRetries >= 0 {
 			w.checkAlive = false
 			w.Alive = false
 			if w.restart {
@@ -246,19 +247,7 @@ func (w *Worker) generate(job *Job) {
 			return
 		}
 
-		var token string
-		if w.withBatch {
-			jsn := make(map[string]string)
-			json.Unmarshal(data, &jsn)
-
-			var ok bool
-			token, ok = jsn["output"]
-			if !ok {
-				continue
-			}
-		} else {
-			token = string(data)
-		}
+		token := string(data)
 
 		select {
 		case job.Output <- token:

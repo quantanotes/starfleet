@@ -8,10 +8,6 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-var (
-	authDefaultRolePath = []string{"llm"}
-)
-
 type AuthConfig struct {
 	JwtSecretKey    string   `json:"jwtSecretKey,omitempty"`
 	JwtSecretKeyEnv string   `json:"jwtSecretKeyEnv,omitempty"`
@@ -21,9 +17,6 @@ type AuthConfig struct {
 func (c *AuthConfig) defaults() {
 	if c.JwtSecretKey == "" {
 		c.JwtSecretKey = os.Getenv(c.JwtSecretKeyEnv)
-	}
-	if c.RolePath == nil {
-		c.RolePath = authDefaultRolePath
 	}
 }
 
@@ -46,7 +39,7 @@ func (am *AuthMiddleware) Middleware(next http.Handler) http.HandlerFunc {
 		token := r.Header.Get("Authorization")
 
 		claims, err := am.getClaims(token)
-		if err != nil || !IsJsonPath(claims, am.rolePath) {
+		if err != nil || (am.rolePath != nil && !IsJsonPath(claims, am.rolePath)) {
 			LogHttpErr(w, id, "Unauthorized", err, http.StatusUnauthorized)
 			return
 		}
