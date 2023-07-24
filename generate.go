@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"time"
 
 	"github.com/rs/zerolog/log"
 )
@@ -45,8 +44,6 @@ func (sf *StarFleet) handleGenerate(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 		case err := <-job.Err:
 			LogHttpErr(w, id, err.Error(), err, http.StatusInternalServerError)
-			return
-		case <-time.After(3 * time.Second):
 			return
 		}
 	}

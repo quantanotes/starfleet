@@ -39,13 +39,15 @@ func (c *WorkerConfig) defaults() {
 }
 
 type WorkerStats struct {
-	Host     string
-	Alive    bool
-	Capacity int
-	Queued   int
-	Running  int
-	Requests int
-	Finished int
+	Host      string
+	Alive     bool
+	Capacity  int
+	Queued    int
+	Running   int
+	Requests  int
+	Finished  int
+	Successes int
+	Fails     int
 }
 
 type Worker struct {
@@ -54,10 +56,13 @@ type Worker struct {
 	host  string
 	queue Queue
 
-	capacity int
-	running  int32
-	requests int32
-	finished int32
+	capacity  int
+	running   int32
+	requests  int32
+	finished  int32
+	fails     int32
+	successes int32
+	failCount int32
 
 	heartbeat  time.Duration
 	timeout    time.Duration
@@ -78,6 +83,9 @@ func NewWorker(config WorkerConfig) *Worker {
 		running:          0,
 		requests:         0,
 		finished:         0,
+		fails:            0,
+		successes:        0,
+		failCount:        0,
 		heartbeat:        time.Duration(config.Heartbeat) * time.Second,
 		timeout:          time.Duration(config.Timeout) * time.Second,
 		checkAlive:       config.CheckAlive,
@@ -110,13 +118,15 @@ func (w *Worker) Load() float64 {
 
 func (w *Worker) Stats() WorkerStats {
 	return WorkerStats{
-		Host:     w.host,
-		Capacity: w.capacity,
-		Alive:    w.Alive,
-		Queued:   len(w.Jobs) + w.queue.Size(),
-		Running:  int(w.running),
-		Requests: int(w.requests),
-		Finished: int(w.finished),
+		Host:      w.host,
+		Capacity:  w.capacity,
+		Alive:     w.Alive,
+		Queued:    len(w.Jobs) + w.queue.Size(),
+		Running:   int(w.running),
+		Requests:  int(w.requests),
+		Finished:  int(w.finished),
+		Successes: int(w.successes),
+		Fails:     int(w.fails),
 	}
 }
 
@@ -148,14 +158,29 @@ func (w *Worker) generate(job *Job) {
 	w.queue.Wait(job.Ctx, job.Id)
 	atomic.AddInt32(&w.running, 1)
 
+	failed := false
+	early := false
+
 	defer func() {
 		log.Info().Str("request id", job.Id).Str("worker host", w.host).Msg("Finishing generate request with worker")
+
 		select {
 		case job.Done <- struct{}{}:
 		default:
 		}
+
 		atomic.AddInt32(&w.running, -1)
 		atomic.AddInt32(&w.finished, 1)
+
+		if failed {
+			w.countFail()
+		} else if !early {
+			w.countSuccess()
+		}
+
+		if w.failCount > 10 {
+			// TODO: reset
+		}
 	}()
 
 	select {
@@ -168,6 +193,7 @@ func (w *Worker) generate(job *Job) {
 	if err != nil {
 		//lint:ignore ST1005 frontend error
 		job.Err <- fmt.Errorf("Error prompting LLM")
+		failed = true
 		return
 	}
 	defer res.Body.Close()
@@ -181,6 +207,7 @@ func (w *Worker) generate(job *Job) {
 		} else if err != nil {
 			//lint:ignore ST1005 frontend error
 			job.Err <- fmt.Errorf("Error reading tokens from LLM")
+			failed = true
 			return
 		}
 		token := string(data)
@@ -191,9 +218,11 @@ func (w *Worker) generate(job *Job) {
 				continue
 			}
 		case <-job.Ctx.Done():
+			early = true
 			return
 		case <-time.After(w.timeout):
 			job.Err <- fmt.Errorf("LLM timed out after %v", w.timeout)
+			failed = true
 			return
 		default:
 			continue
@@ -220,4 +249,18 @@ func (w *Worker) prompt(ctx context.Context, payload []byte) (*http.Response, er
 	}
 
 	return http.DefaultClient.Do(req.WithContext(ctx))
+}
+
+func (w *Worker) restart() {
+
+}
+
+func (w *Worker) countSuccess() {
+	atomic.AddInt32(&w.successes, 1)
+	atomic.StoreInt32(&w.failCount, 0)
+}
+
+func (w *Worker) countFail() {
+	atomic.AddInt32(&w.fails, 1)
+	atomic.AddInt32(&w.failCount, 1)
 }
