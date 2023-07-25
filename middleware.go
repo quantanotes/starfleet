@@ -68,13 +68,6 @@ func (m *Middleware) Middleware(next http.HandlerFunc) http.HandlerFunc {
 	})
 }
 
-// func (m *Middleware) middleware(middleware MiddlewareInterface, next http.HandlerFunc) http.HandlerFunc {
-// 	if middleware != nil {
-// 		return middleware.Middleware(next)
-// 	}
-// 	return next
-// }
-
 func headers(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")

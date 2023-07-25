@@ -13,22 +13,32 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const (
+	workerDefaultHeartbeat  = 1
+	workerDefaultTimeout    = 10
+	workerDefaultMaxRetries = 5
+)
+
+type WorkerState int
+
 type WorkerConfig struct {
 	Host             string            `json:"host"`
 	Capacity         int               `json:"capacity"`
 	Heartbeat        int               `json:"heartbeat,omitempty"`
 	Timeout          int               `json:"timeout,omitempty"`
 	CheckAlive       bool              `json:"checkAlive,omitempty"`
+	MaxRetries       int               `json:"maxRetries,omitempty"`
+	Restart          bool              `json:"restart,omitempty"`
 	Headers          map[string]string `json:"headers,omitempty"`
 	GenerateEndpoint string            `json:"generateEndpoint,omitempty"`
 }
 
 func (c *WorkerConfig) defaults() {
 	if c.Heartbeat <= 0 {
-		c.Heartbeat = 1
+		c.Heartbeat = workerDefaultHeartbeat
 	}
 	if c.Timeout <= 0 {
-		c.Timeout = 10
+		c.Timeout = workerDefaultTimeout
 	}
 	if c.GenerateEndpoint == "" {
 		c.GenerateEndpoint = "/generate"
@@ -39,15 +49,16 @@ func (c *WorkerConfig) defaults() {
 }
 
 type WorkerStats struct {
-	Host      string
-	Alive     bool
-	Capacity  int
-	Queued    int
-	Running   int
-	Requests  int
-	Finished  int
-	Successes int
-	Fails     int
+	Host           string
+	Alive          bool
+	Capacity       int
+	Queued         int
+	Running        int
+	Requests       int
+	Finished       int
+	Successes      int
+	Fails          int
+	AvgRequestTime int
 }
 
 type Worker struct {
@@ -63,6 +74,12 @@ type Worker struct {
 	fails     int32
 	successes int32
 	failCount int32
+
+	maxRetries int
+	restart    bool
+
+	avgReqTime   int64
+	totalReqTime int64
 
 	heartbeat  time.Duration
 	timeout    time.Duration
@@ -86,6 +103,8 @@ func NewWorker(config WorkerConfig) *Worker {
 		fails:            0,
 		successes:        0,
 		failCount:        0,
+		avgReqTime:       0,
+		totalReqTime:     0,
 		heartbeat:        time.Duration(config.Heartbeat) * time.Second,
 		timeout:          time.Duration(config.Timeout) * time.Second,
 		checkAlive:       config.CheckAlive,
@@ -118,20 +137,25 @@ func (w *Worker) Load() float64 {
 
 func (w *Worker) Stats() WorkerStats {
 	return WorkerStats{
-		Host:      w.host,
-		Capacity:  w.capacity,
-		Alive:     w.Alive,
-		Queued:    len(w.Jobs) + w.queue.Size(),
-		Running:   int(w.running),
-		Requests:  int(w.requests),
-		Finished:  int(w.finished),
-		Successes: int(w.successes),
-		Fails:     int(w.fails),
+		Host:           w.host,
+		Capacity:       w.capacity,
+		Alive:          w.Alive,
+		Queued:         len(w.Jobs) + w.queue.Size(),
+		Running:        int(w.running),
+		Requests:       int(w.requests),
+		Finished:       int(w.finished),
+		Successes:      int(w.successes),
+		Fails:          int(w.fails),
+		AvgRequestTime: int(w.avgReqTime),
 	}
 }
 
 func (w *Worker) doHearbeat() {
 	for range time.Tick(w.heartbeat) {
+		if !w.checkAlive {
+			return
+		}
+
 		alive := w.ping()
 		if w.Alive && !alive {
 			log.Error().Str("host", w.host).Msg("Worker has died")
@@ -161,6 +185,8 @@ func (w *Worker) generate(job *Job) {
 	failed := false
 	early := false
 
+	reqTime := time.Now().UnixMilli()
+
 	defer func() {
 		log.Info().Str("request id", job.Id).Str("worker host", w.host).Msg("Finishing generate request with worker")
 
@@ -178,9 +204,19 @@ func (w *Worker) generate(job *Job) {
 			w.countSuccess()
 		}
 
-		if w.failCount > 10 {
-			// TODO: reset
+		if w.failCount >= int32(w.maxRetries) && w.maxRetries >= 0 {
+			w.checkAlive = false
+			w.Alive = false
+			if w.restart {
+				go w.doRestart()
+			}
 		}
+
+		if !w.Alive {
+			atomic.StoreInt32(&w.failCount, 0)
+		}
+
+		w.calcAvgReqTime(reqTime)
 	}()
 
 	select {
@@ -210,6 +246,7 @@ func (w *Worker) generate(job *Job) {
 			failed = true
 			return
 		}
+
 		token := string(data)
 
 		select {
@@ -251,7 +288,7 @@ func (w *Worker) prompt(ctx context.Context, payload []byte) (*http.Response, er
 	return http.DefaultClient.Do(req.WithContext(ctx))
 }
 
-func (w *Worker) restart() {
+func (w *Worker) doRestart() {
 
 }
 
@@ -263,4 +300,15 @@ func (w *Worker) countSuccess() {
 func (w *Worker) countFail() {
 	atomic.AddInt32(&w.fails, 1)
 	atomic.AddInt32(&w.failCount, 1)
+}
+
+func (w *Worker) calcAvgReqTime(reqTime int64) {
+	reqTime = time.Now().UnixMilli() - reqTime
+	atomic.AddInt64(&w.totalReqTime, reqTime)
+	atomic.AddInt32(&w.finished, 1)
+
+	totalReqTime := atomic.LoadInt64(&w.totalReqTime)
+	numRequests := atomic.LoadInt32(&w.finished)
+
+	w.avgReqTime = totalReqTime / int64(numRequests)
 }
