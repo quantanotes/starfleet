@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -80,6 +81,7 @@ type Worker struct {
 	totalReqTime int64
 
 	heartbeat  time.Duration
+	hbMu       sync.Mutex
 	timeout    time.Duration
 	checkAlive bool
 
@@ -104,6 +106,7 @@ func NewWorker(config WorkerConfig) *Worker {
 		avgReqTime:       0,
 		totalReqTime:     0,
 		heartbeat:        time.Duration(config.Heartbeat) * time.Second,
+		hbMu:             sync.Mutex{},
 		timeout:          time.Duration(config.Timeout) * time.Second,
 		checkAlive:       config.CheckAlive,
 		headers:          config.Headers,
@@ -154,6 +157,7 @@ func (w *Worker) Stats() WorkerStats {
 
 func (w *Worker) doHearbeat() {
 	for range time.Tick(w.heartbeat) {
+		w.hbMu.Lock()
 		if !w.checkAlive {
 			return
 		}
@@ -165,7 +169,9 @@ func (w *Worker) doHearbeat() {
 		if !w.Alive && alive {
 			log.Error().Str("host", w.host).Msg("Worker has been revived")
 		}
+
 		w.Alive = alive
+		w.hbMu.Unlock()
 	}
 }
 
@@ -207,8 +213,10 @@ func (w *Worker) generate(job *Job) {
 		}
 
 		if w.failCount >= int32(w.maxRetries) && w.maxRetries != 0 {
+			w.hbMu.Lock()
 			w.checkAlive = false
 			w.Alive = false
+			w.hbMu.Unlock()
 			if w.restart {
 				go w.doRestart()
 			}
@@ -223,6 +231,7 @@ func (w *Worker) generate(job *Job) {
 
 	select {
 	case <-job.Ctx.Done():
+		early = true
 		return
 	default:
 	}
