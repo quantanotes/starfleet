@@ -36,7 +36,7 @@ func (sf *StarFleet) handleDashboardRequestCounter(w http.ResponseWriter, r *htt
 
 func (sf *StarFleet) handleDashboardRevive(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
-	numStr := path[len("/revive/"):]
+	numStr := path[len("/dashboard-revive/"):]
 	num, err := strconv.Atoi(numStr)
 	if err != nil {
 		http.Error(w, "Invalid number", http.StatusBadRequest)

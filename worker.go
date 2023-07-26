@@ -212,7 +212,7 @@ func (w *Worker) generate(job *Job) {
 			w.countSuccess()
 		}
 
-		if w.failCount >= int32(w.maxRetries) && w.maxRetries != 0 {
+		if w.failCount >= int32(w.maxRetries) {
 			w.hbMu.Lock()
 			w.checkAlive = false
 			w.Alive = false
