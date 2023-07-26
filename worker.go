@@ -19,8 +19,6 @@ const (
 	workerDefaultMaxRetries = 5
 )
 
-type WorkerState int
-
 type WorkerConfig struct {
 	Host             string            `json:"host"`
 	Capacity         int               `json:"capacity"`
@@ -131,6 +129,10 @@ func (w *Worker) Work() {
 	}
 }
 
+func (w *Worker) Revive() {
+	w.checkAlive = true
+}
+
 func (w *Worker) Load() float64 {
 	return float64(len(w.Jobs)+w.queue.Size()+int(w.running)) / float64(w.capacity)
 }
@@ -204,7 +206,7 @@ func (w *Worker) generate(job *Job) {
 			w.countSuccess()
 		}
 
-		if w.failCount >= int32(w.maxRetries) && w.maxRetries >= 0 {
+		if w.failCount >= int32(w.maxRetries) && w.maxRetries != 0 {
 			w.checkAlive = false
 			w.Alive = false
 			if w.restart {

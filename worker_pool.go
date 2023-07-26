@@ -51,6 +51,13 @@ func (wp *WorkerPool) Enlist(job *Job) error {
 	}
 }
 
+func (wp *WorkerPool) Revive(num int) {
+	if num >= len(wp.workers) {
+		return
+	}
+	wp.workers[num].Revive()
+}
+
 func (wp *WorkerPool) Stats() WorkerPoolStats {
 	stats := make(WorkerPoolStats, len(wp.workers))
 	for i, w := range wp.workers {

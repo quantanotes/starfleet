@@ -3,6 +3,7 @@ package main
 import (
 	"html/template"
 	"net/http"
+	"strconv"
 
 	"github.com/rs/zerolog/log"
 )
@@ -31,4 +32,15 @@ func (sf *StarFleet) handleDashboardRequestCounter(w http.ResponseWriter, r *htt
 	if err := tmpl.Execute(w, sf.requestCounter.Stats()); err != nil {
 		http.Error(w, "", http.StatusInternalServerError)
 	}
+}
+
+func (sf *StarFleet) handleDashboardRevive(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path
+	numStr := path[len("/revive/"):]
+	num, err := strconv.Atoi(numStr)
+	if err != nil {
+		http.Error(w, "Invalid number", http.StatusBadRequest)
+		return
+	}
+	sf.workerPool.Revive(num)
 }

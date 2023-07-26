@@ -10,5 +10,6 @@
     <td>{{ .Successes }}</td>
     <td>{{ .Fails }}</td>
     <td>{{ .AvgRequestTime }}</td>
+    {{<td><button hx-get="/dashboard-revive/{{ .Alias }}" hx-swap="none">Revive</button></td>}}
 </tr>
 {{ end }}
