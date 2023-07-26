@@ -103,6 +103,8 @@ func NewWorker(config WorkerConfig) *Worker {
 		fails:            0,
 		successes:        0,
 		failCount:        0,
+		restart:          config.Restart,
+		maxRetries:       config.MaxRetries,
 		avgReqTime:       0,
 		totalReqTime:     0,
 		heartbeat:        time.Duration(config.Heartbeat) * time.Second,
@@ -134,6 +136,7 @@ func (w *Worker) Work() {
 
 func (w *Worker) Revive() {
 	w.checkAlive = true
+	go w.doHearbeat()
 }
 
 func (w *Worker) Load() float64 {
@@ -212,7 +215,8 @@ func (w *Worker) generate(job *Job) {
 			w.countSuccess()
 		}
 
-		if w.failCount >= int32(w.maxRetries) {
+		if atomic.LoadInt32(&w.failCount) >= int32(w.maxRetries) {
+			log.Warn().Str("worker host", w.host).Msgf("Worker has failed after %v retries", atomic.LoadInt32(&w.failCount))
 			w.hbMu.Lock()
 			w.checkAlive = false
 			w.Alive = false
