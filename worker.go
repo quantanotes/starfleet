@@ -80,8 +80,10 @@ type Worker struct {
 	avgReqTime   int64
 	totalReqTime int64
 
-	heartbeat  time.Duration
-	hbMu       sync.Mutex
+	heartbeat      time.Duration
+	isHeartbeating bool
+	hbMu           sync.Mutex
+
 	timeout    time.Duration
 	checkAlive bool
 
@@ -108,6 +110,7 @@ func NewWorker(config WorkerConfig) *Worker {
 		avgReqTime:       0,
 		totalReqTime:     0,
 		heartbeat:        time.Duration(config.Heartbeat) * time.Second,
+		isHeartbeating:   false,
 		hbMu:             sync.Mutex{},
 		timeout:          time.Duration(config.Timeout) * time.Second,
 		checkAlive:       config.CheckAlive,
@@ -135,7 +138,10 @@ func (w *Worker) Work() {
 }
 
 func (w *Worker) Revive() {
+	w.hbMu.Lock()
+	defer w.hbMu.Unlock()
 	w.checkAlive = true
+	w.Alive = true
 	go w.doHearbeat()
 }
 
@@ -159,9 +165,20 @@ func (w *Worker) Stats() WorkerStats {
 }
 
 func (w *Worker) doHearbeat() {
+	w.hbMu.Lock()
+	w.isHeartbeating = true
+	w.hbMu.Unlock()
+
+	defer func() {
+		w.hbMu.Lock()
+		w.isHeartbeating = false
+		w.hbMu.Unlock()
+	}()
+
 	for range time.Tick(w.heartbeat) {
 		w.hbMu.Lock()
 		if !w.checkAlive {
+			w.hbMu.Unlock()
 			return
 		}
 
