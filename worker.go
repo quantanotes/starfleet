@@ -89,6 +89,8 @@ type Worker struct {
 
 	headers          map[string]string
 	generateEndpoint string
+
+	config WorkerConfig
 }
 
 func NewWorker(config WorkerConfig) *Worker {
@@ -116,6 +118,7 @@ func NewWorker(config WorkerConfig) *Worker {
 		checkAlive:       config.CheckAlive,
 		headers:          config.Headers,
 		generateEndpoint: config.GenerateEndpoint,
+		config:           config,
 	}
 }
 
@@ -138,11 +141,15 @@ func (w *Worker) Work() {
 }
 
 func (w *Worker) Revive() {
-	w.hbMu.Lock()
-	defer w.hbMu.Unlock()
-	w.checkAlive = true
-	w.Alive = true
-	go w.doHearbeat()
+	if w.config.CheckAlive {
+		w.hbMu.Lock()
+		defer w.hbMu.Unlock()
+		w.checkAlive = true
+		w.Alive = true
+		go w.doHearbeat()
+	} else {
+		w.Alive = true
+	}
 }
 
 func (w *Worker) Load() float64 {
