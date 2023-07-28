@@ -33,6 +33,7 @@ func (q *Queue) Wait(ctx context.Context, id string) {
 	go func() {
 		<-ctx.Done()
 		if _, ok := q.ids.Load(id); ok {
+			q.ids.Delete(id)
 			<-q.queue
 		}
 	}()
