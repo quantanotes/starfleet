@@ -344,7 +344,6 @@ func (w *Worker) countFail() {
 func (w *Worker) calcAvgReqTime(reqTime int64) {
 	reqTime = time.Now().UnixMilli() - reqTime
 	atomic.AddInt64(&w.totalReqTime, reqTime)
-	atomic.AddInt32(&w.finished, 1)
 
 	totalReqTime := atomic.LoadInt64(&w.totalReqTime)
 	numRequests := atomic.LoadInt32(&w.finished)
