@@ -52,6 +52,7 @@ type WorkerStats struct {
 	Alive          bool
 	Capacity       int
 	Queued         int
+	Released       int
 	Running        int
 	Requests       int
 	Finished       int
@@ -150,7 +151,7 @@ func (w *Worker) Revive() {
 }
 
 func (w *Worker) Load() float64 {
-	return float64(len(w.Jobs)+w.queue.Size()+int(w.running)) / float64(w.capacity)
+	return float64(len(w.Jobs)+w.queue.Stats().Size+int(w.running)) / float64(w.capacity)
 }
 
 func (w *Worker) Stats() WorkerStats {
@@ -158,7 +159,8 @@ func (w *Worker) Stats() WorkerStats {
 		Host:           w.host,
 		Capacity:       w.capacity,
 		Alive:          w.Alive,
-		Queued:         len(w.Jobs) + w.queue.Size(),
+		Queued:         w.queue.Stats().Size,
+		Released:       w.queue.Stats().Released,
 		Running:        int(w.running),
 		Requests:       int(w.requests),
 		Finished:       int(w.finished),
@@ -258,7 +260,7 @@ func (w *Worker) generate(job *Job) {
 	default:
 	}
 
-	res, err := w.prompt(job.ReqCtx, job.Payload)
+	res, err := w.prompt(job.Ctx, job.Payload)
 	if err != nil {
 		//lint:ignore ST1005 frontend error
 		job.Err <- fmt.Errorf("Error prompting LLM")

@@ -23,7 +23,7 @@ func (sf *StarFleet) handleGenerate(w http.ResponseWriter, r *http.Request) {
 
 	log.Info().Str("request id", id).Msg("Beginning generation job")
 	if err := sf.workerPool.Enlist(job); err != nil {
-		LogHttpErr(w, id, "Could not connect to LLM", nil, http.StatusServiceUnavailable)
+		LogHttpErr(w, id, "Could not connect to LLM", err, http.StatusServiceUnavailable)
 		return
 	}
 
