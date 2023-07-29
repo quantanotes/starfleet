@@ -38,11 +38,11 @@ func TestWorkerPool(t *testing.T) {
 			fmt.Printf("job 2: %s\n", token)
 		case token := <-job3.Output:
 			fmt.Printf("job 3: %s\n", token)
-		case <-job1.Done:
+		case <-job1.Ctx.Done():
 			fmt.Println("job 1 done")
-		case <-job2.Done:
+		case <-job2.Ctx.Done():
 			fmt.Println("job 2 done")
-		case <-job3.Done:
+		case <-job3.Ctx.Done():
 			fmt.Println("job 3 done")
 			return
 		}

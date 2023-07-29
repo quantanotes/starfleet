@@ -22,11 +22,11 @@ type Middleware struct {
 
 func NewMiddleware(config MiddlewareConfig) Middleware {
 	m := Middleware{}
-	if config.Auth != nil {
-		m.middlewares = append(m.middlewares, NewAuthMiddleware(*config.Auth))
-	}
 	if config.Once != nil {
 		m.middlewares = append(m.middlewares, NewOnceMiddleware(*config.Once))
+	}
+	if config.Auth != nil {
+		m.middlewares = append(m.middlewares, NewAuthMiddleware(*config.Auth))
 	}
 	return m
 }

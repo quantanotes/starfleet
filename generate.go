@@ -37,7 +37,7 @@ func (sf *StarFleet) handleGenerate(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-job.Done:
+		case <-job.Ctx.Done():
 			return
 		case token := <-job.Output:
 			fmt.Fprint(w, token)

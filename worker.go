@@ -130,10 +130,7 @@ func (w *Worker) Work() {
 	for job := range w.Jobs {
 		if !w.Alive {
 			job.Err <- fmt.Errorf("LLM became unresponsive")
-			select {
-			case job.Done <- struct{}{}:
-			default:
-			}
+			job.Finish()
 			continue
 		}
 		go w.generate(job)
@@ -225,10 +222,7 @@ func (w *Worker) generate(job *Job) {
 	defer func() {
 		log.Info().Str("request id", job.Id).Str("worker host", w.host).Msg("Finishing generate request with worker")
 
-		select {
-		case job.Done <- struct{}{}:
-		default:
-		}
+		job.Finish()
 
 		atomic.AddInt32(&w.running, -1)
 		atomic.AddInt32(&w.finished, 1)
@@ -258,13 +252,13 @@ func (w *Worker) generate(job *Job) {
 	}()
 
 	select {
-	case <-job.Ctx.Done():
+	case <-job.ReqCtx.Done():
 		early = true
 		return
 	default:
 	}
 
-	res, err := w.prompt(job.Ctx, job.Payload)
+	res, err := w.prompt(job.ReqCtx, job.Payload)
 	if err != nil {
 		//lint:ignore ST1005 frontend error
 		job.Err <- fmt.Errorf("Error prompting LLM")
@@ -290,18 +284,16 @@ func (w *Worker) generate(job *Job) {
 
 		select {
 		case job.Output <- token:
-			if token != "" {
-				continue
+			if token == "" {
+				return
 			}
-		case <-job.Ctx.Done():
+		case <-job.ReqCtx.Done():
 			early = true
 			return
 		case <-time.After(w.timeout):
 			job.Err <- fmt.Errorf("LLM timed out after %v", w.timeout)
 			failed = true
 			return
-		default:
-			continue
 		}
 	}
 }

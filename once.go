@@ -72,8 +72,10 @@ func (om *OnceMiddleware) Middleware(next http.Handler) http.HandlerFunc {
 
 		next.ServeHTTP(w, r)
 
-		if err := om.client.Del(context.Background(), key).Err(); err != nil {
-			log.Error().Err(err).Str("request_id", id).Msg("Failed to release lock")
-		}
+		go func() {
+			if err := om.client.Del(context.Background(), key).Err(); err != nil {
+				log.Error().Err(err).Str("request_id", id).Msg("Failed to release lock")
+			}
+		}()
 	})
 }

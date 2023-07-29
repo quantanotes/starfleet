@@ -39,7 +39,7 @@ func (wp *WorkerPool) Enlist(job *Job) error {
 		return fmt.Errorf("could not connect to live LLM server")
 	}
 	select {
-	case <-job.Ctx.Done():
+	case <-job.ReqCtx.Done():
 		return nil
 	case worker.Jobs <- job:
 		log.
