@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,8 +17,8 @@ import (
 
 const (
 	workerDefaultHeartbeat  = 1
-	workerDefaultTimeout    = 10
-	workerDefaultMaxRetries = 5
+	workerDefaultTimeout    = 20
+	workerDefaultMaxRetries = 10
 )
 
 type WorkerConfig struct {
@@ -30,6 +31,7 @@ type WorkerConfig struct {
 	Restart          bool              `json:"restart,omitempty"`
 	Headers          map[string]string `json:"headers,omitempty"`
 	GenerateEndpoint string            `json:"generateEndpoint,omitempty"`
+	OpenAI           bool              `json:"openai"`
 }
 
 func (c *WorkerConfig) defaults() {
@@ -90,6 +92,7 @@ type Worker struct {
 
 	headers          map[string]string
 	generateEndpoint string
+	openai           bool
 
 	config WorkerConfig
 }
@@ -119,6 +122,7 @@ func NewWorker(config WorkerConfig) *Worker {
 		checkAlive:       config.CheckAlive,
 		headers:          config.Headers,
 		generateEndpoint: config.GenerateEndpoint,
+		openai:           config.OpenAI,
 		config:           config,
 	}
 }
@@ -282,7 +286,19 @@ func (w *Worker) generate(job *Job) {
 			return
 		}
 
-		token := string(data)
+		token := ""
+		if w.openai {
+			if token, err = w.openaiFilter(data); err == io.EOF {
+				return
+			} else if err != nil {
+				//lint:ignore ST1005 frontend error
+				job.Err <- fmt.Errorf("Error reading tokens from LLM")
+				failed = true
+				return
+			}
+		} else {
+			token = string(data)
+		}
 
 		select {
 		case job.Output <- token:
@@ -318,7 +334,8 @@ func (w *Worker) prompt(ctx context.Context, payload []byte) (*http.Response, er
 		req.Header.Set(h, v)
 	}
 
-	return http.DefaultClient.Do(req.WithContext(ctx))
+	client := http.Client{}
+	return client.Do(req.WithContext(ctx))
 }
 
 func (w *Worker) doRestart() {
@@ -343,4 +360,29 @@ func (w *Worker) calcAvgReqTime(reqTime int64) {
 	numRequests := atomic.LoadInt32(&w.finished)
 
 	w.avgReqTime = totalReqTime / int64(numRequests)
+}
+
+type openaiResponse struct {
+	Choices []struct {
+		Delta struct {
+			Content string `json:"content"`
+		} `json:"delta"`
+	} `json:"choices"`
+}
+
+func (w *Worker) openaiFilter(data []byte) (string, error) {
+	if string(data) == "[DONE]" {
+		return "", io.EOF
+	}
+
+	var jsn openaiResponse
+	if err := json.Unmarshal(data, &jsn); err != nil {
+		return "", err
+	}
+
+	if len(jsn.Choices) > 0 {
+		return jsn.Choices[0].Delta.Content, nil
+	}
+
+	return "", nil
 }
