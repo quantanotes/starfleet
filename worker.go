@@ -31,7 +31,7 @@ type WorkerConfig struct {
 	Restart          bool              `json:"restart,omitempty"`
 	Headers          map[string]string `json:"headers,omitempty"`
 	GenerateEndpoint string            `json:"generateEndpoint,omitempty"`
-	OpenAI           bool              `json:"openai"`
+	OpenAI           bool              `json:"openai,omitempty"`
 }
 
 func (c *WorkerConfig) defaults() {
