@@ -44,3 +44,14 @@ func (sf *StarFleet) handleDashboardRevive(w http.ResponseWriter, r *http.Reques
 	}
 	sf.workerPool.Revive(num)
 }
+
+func (sf *StarFleet) handleDashboardRestart( w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path
+	numStr := path[len("/dashboard-restart/"):]
+	num, err := strconv.Atoi(numStr)
+	if err != nil {
+		http.Error(w, "Invalid number", http.StatusBadRequest)
+		return
+	}
+	sf.workerPool.Restart(num)
+}

@@ -31,6 +31,7 @@ func (sf *StarFleet) Run() {
 	http.HandleFunc("/dashboard-stats", sf.handleDashboardStats)
 	http.HandleFunc("/dashboard-request-counter", sf.handleDashboardRequestCounter)
 	http.HandleFunc("/dashboard-revive/", sf.handleDashboardRevive)
+	http.HandleFunc("/dashboard-restart/", sf.handleDashboardRestart)
 
 	http.HandleFunc("/generate", sf.middleware.Middleware(sf.requestCounter.Middleware(sf.handleGenerate)))
 
