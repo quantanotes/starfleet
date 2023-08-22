@@ -5,12 +5,11 @@ package main
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 type Kubernetes struct {
@@ -19,9 +18,8 @@ type Kubernetes struct {
 
 func NewKubernetes () *Kubernetes {
 	// Load Kubernetes config
-	home := homedir.HomeDir()
-	kubeconfig := filepath.Join(home, ".kube", "config")
-	config, err := rest.InClusterConfig() // or use rest.InClusterConfig()
+	kubeconfig := "./kubernetes/.kubeconfig"
+	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig) // or use rest.InClusterConfig()
 	if err != nil {
 			panic(err.Error())
 	}
@@ -49,11 +47,12 @@ func createPod(k *Kubernetes) error {
 					Resources: metav1.ResourceRequirements{
 						Requests: metav1.ResourceList{
 							v1.ResourceCPU:    resource.MustParse("0.5"), // 0.5 CPU core
-							v1.ResourceMemory: resource.MustParse("1Gi"), // 1 GiB memory
+							v1.ResourceMemory: resource.MustParse("1Gi"),
 						},
 						Limits: metav1.ResourceList{
 							v1.ResourceCPU:    resource.MustParse("1"), // 1 CPU core
-							v1.ResourceMemory: resource.MustParse("2Gi"), // 2 GiB memory
+							v1.ResourceMemory: resource.MustParse("2Gi"),
+							// Not sure if this works, couldn't find good documentation on it.
 							"nvidia.com/gpu": resource.MustParse("1"),
 						},
 					},
