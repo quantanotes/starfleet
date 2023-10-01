@@ -62,7 +62,7 @@ func (wp *WorkerPool) Stats() WorkerPoolStats {
 	stats := make(WorkerPoolStats, len(wp.workers))
 	for i, w := range wp.workers {
 		stats[i] = w.Stats()
-		stats[i].Host = strconv.Itoa(i) // Temporary until dashboard security is implemented
+		stats[i].Host = strconv.Itoa(i)
 	}
 	return stats
 }

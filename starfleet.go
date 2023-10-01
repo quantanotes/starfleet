@@ -33,6 +33,7 @@ func (sf *StarFleet) Run() {
 	http.HandleFunc("/dashboard-revive/", sf.handleDashboardRevive)
 
 	http.HandleFunc("/generate", sf.middleware.Middleware(sf.requestCounter.Middleware(sf.handleGenerate)))
+	http.HandleFunc("/queue")
 
 	log.Info().Msg("Listening on port :8080")
 	log.Fatal().Err(http.ListenAndServe(":8080", nil))

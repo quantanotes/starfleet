@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -241,10 +242,12 @@ func (w *Worker) generate(job *Job) {
 
 		if atomic.LoadInt32(&w.failCount) >= int32(w.maxRetries) {
 			log.Warn().Str("worker host", w.host).Msgf("Worker has failed after %v retries", atomic.LoadInt32(&w.failCount))
+
 			w.hbMu.Lock()
 			w.checkAlive = false
 			w.Alive = false
 			w.hbMu.Unlock()
+			
 			if w.restart {
 				go w.doRestart()
 			}
@@ -266,6 +269,7 @@ func (w *Worker) generate(job *Job) {
 
 	res, err := w.prompt(job.Ctx, job.Payload)
 	if err != nil {
+		log.Error().Err(err).Str("request id", job.Id).Str("worker host", w.host).Msg("Error prompting LLM")
 		//lint:ignore ST1005 frontend error
 		job.Err <- fmt.Errorf("Error prompting LLM")
 		failed = true
@@ -280,24 +284,24 @@ func (w *Worker) generate(job *Job) {
 		if _, err := res.Body.Read(data); err == io.EOF {
 			return
 		} else if err != nil {
+			log.Error().Err(err).Str("request id", job.Id).Str("worker host", w.host).Msg("Error reading tokens from LLM")
 			//lint:ignore ST1005 frontend error
 			job.Err <- fmt.Errorf("Error reading tokens from LLM")
 			failed = true
 			return
 		}
 
-		token := ""
+		token := string(data)
 		if w.openai {
-			if token, err = w.openaiFilter(data); err == io.EOF {
+			if token, err = w.openaiFilter(token); err == io.EOF {
 				return
 			} else if err != nil {
+				log.Error().Err(err).Str("request id", job.Id).Str("worker host", w.host).Msg("Error reading tokens from LLM")
 				//lint:ignore ST1005 frontend error
 				job.Err <- fmt.Errorf("Error reading tokens from LLM")
 				failed = true
 				return
 			}
-		} else {
-			token = string(data)
 		}
 
 		select {
@@ -321,6 +325,7 @@ func (w *Worker) prompt(ctx context.Context, payload []byte) (*http.Response, er
 	if err != nil {
 		return nil, err
 	}
+
 	req, err := http.NewRequest("POST", path, bytes.NewBuffer(payload))
 	if err != nil {
 		return nil, err
@@ -370,13 +375,15 @@ type openaiResponse struct {
 	} `json:"choices"`
 }
 
-func (w *Worker) openaiFilter(data []byte) (string, error) {
+func (w *Worker) openaiFilter(data string) (string, error) {
+	data = strings.TrimPrefix(data, "data: ")
+
 	if string(data) == "[DONE]" {
 		return "", io.EOF
 	}
 
 	var jsn openaiResponse
-	if err := json.Unmarshal(data, &jsn); err != nil {
+	if err := json.Unmarshal([]byte(data), &jsn); err != nil {
 		return "", err
 	}
 

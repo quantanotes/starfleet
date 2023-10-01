@@ -43,7 +43,7 @@ func (sf *StarFleet) handleGenerate(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprint(w, token)
 			flusher.Flush()
 		case err := <-job.Err:
-			LogHttpErr(w, id, err.Error(), err, http.StatusInternalServerError)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 	}
