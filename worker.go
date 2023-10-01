@@ -32,6 +32,7 @@ type WorkerConfig struct {
 	Restart          bool              `json:"restart,omitempty"`
 	Headers          map[string]string `json:"headers,omitempty"`
 	GenerateEndpoint string            `json:"generateEndpoint,omitempty"`
+	RestartEndpoint  string            `json:"restartEndpoint,omitempty"`
 	OpenAI           bool              `json:"openai,omitempty"`
 }
 
@@ -44,6 +45,9 @@ func (c *WorkerConfig) defaults() {
 	}
 	if c.GenerateEndpoint == "" {
 		c.GenerateEndpoint = "/generate"
+	}
+	if c.RestartEndpoint == "" {
+		c.RestartEndpoint = "/reload"
 	}
 	if c.Headers == nil {
 		c.Headers = make(map[string]string)
@@ -93,6 +97,7 @@ type Worker struct {
 
 	headers          map[string]string
 	generateEndpoint string
+	restartEndpoint  string
 	openai           bool
 
 	config WorkerConfig
@@ -123,6 +128,7 @@ func NewWorker(config WorkerConfig) *Worker {
 		checkAlive:       config.CheckAlive,
 		headers:          config.Headers,
 		generateEndpoint: config.GenerateEndpoint,
+		restartEndpoint:  config.RestartEndpoint,
 		openai:           config.OpenAI,
 		config:           config,
 	}
@@ -343,8 +349,22 @@ func (w *Worker) prompt(ctx context.Context, payload []byte) (*http.Response, er
 	return client.Do(req.WithContext(ctx))
 }
 
-func (w *Worker) doRestart() {
+func (w *Worker) doRestart() (*http.Response, error) {
+	path, err := url.JoinPath(w.host, w.restartEndpoint)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequest("POST", path, nil)
+	if err != nil {
+		return nil, err
+	}
 
+	for h, v := range w.headers {
+		req.Header.Set(h, v)
+	}
+
+	client := http.Client{}
+	return client.Do(req)
 }
 
 func (w *Worker) countSuccess() {

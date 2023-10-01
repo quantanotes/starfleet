@@ -58,6 +58,13 @@ func (wp *WorkerPool) Revive(num int) {
 	wp.workers[num].Revive()
 }
 
+func (wp *WorkerPool) Restart(num int) {
+	if num >= len(wp.workers) {
+		return
+	}
+	wp.workers[num].doRestart()
+}
+
 func (wp *WorkerPool) Stats() WorkerPoolStats {
 	stats := make(WorkerPoolStats, len(wp.workers))
 	for i, w := range wp.workers {
