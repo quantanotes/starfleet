@@ -20,26 +20,26 @@ func (c *AuthConfig) defaults() {
 	}
 }
 
-type AuthMiddleware struct {
+type Auth struct {
 	jwtSecretKey []byte
 	rolePath     []string
 }
 
-func NewAuthMiddleware(config AuthConfig) *AuthMiddleware {
+func NewAuth(config AuthConfig) *Auth {
 	config.defaults()
-	return &AuthMiddleware{
+	return &Auth{
 		jwtSecretKey: []byte(config.JwtSecretKey),
 		rolePath:     config.RolePath,
 	}
 }
 
-func (am *AuthMiddleware) Middleware(next http.Handler) http.HandlerFunc {
+func (a *Auth) Middleware(next http.Handler) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id := r.Header.Get("X-Request-ID")
 		token := r.Header.Get("Authorization")
 
-		claims, err := am.getClaims(token)
-		if err != nil || (am.rolePath != nil && !IsJsonPath(claims, am.rolePath)) {
+		claims, err := a.getClaims(token)
+		if err != nil || (a.rolePath != nil && !IsJsonPath(claims, a.rolePath)) {
 			LogHttpErr(w, id, "Unauthorized", err, http.StatusUnauthorized)
 			return
 		}
@@ -48,12 +48,12 @@ func (am *AuthMiddleware) Middleware(next http.Handler) http.HandlerFunc {
 	})
 }
 
-func (am *AuthMiddleware) getClaims(token string) (map[string]any, error) {
+func (a *Auth) getClaims(token string) (map[string]any, error) {
 	t, err := jwt.Parse(token, func(t *jwt.Token) (any, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 		}
-		return []byte(am.jwtSecretKey), nil
+		return []byte(a.jwtSecretKey), nil
 	})
 	if err != nil {
 		return nil, err
