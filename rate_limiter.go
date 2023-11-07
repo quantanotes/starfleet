@@ -2,8 +2,6 @@ package main
 
 import (
 	"net/http"
-
-	"github.com/redis/go-redis/v9"
 )
 
 type RateLimiterConfig struct {
@@ -11,7 +9,7 @@ type RateLimiterConfig struct {
 }
 
 type RateLimiter struct {
-	client *redis.Client
+	//client *redis.Client
 }
 
 func (rl *RateLimiter) Middleware(next http.Handler) http.HandlerFunc {

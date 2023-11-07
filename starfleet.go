@@ -36,5 +36,5 @@ func (sf *StarFleet) Run() {
 	http.HandleFunc("/queue", sf.handleQueue)
 
 	log.Info().Msg("Listening on port :8080")
-	log.Fatal().Err(http.ListenAndServe(":8080", nil))
+	log.Fatal().Err(http.ListenAndServe(":8080", nil)).Msg("fatal error has occurred on port :8080")
 }

@@ -247,7 +247,7 @@ func (w *Worker) generate(job *Job) {
 			w.checkAlive = false
 			w.Alive = false
 			w.hbMu.Unlock()
-			
+
 			if w.restart {
 				go w.doRestart()
 			}
@@ -281,7 +281,8 @@ func (w *Worker) generate(job *Job) {
 
 	for {
 		data := make([]byte, 1024)
-		if _, err := res.Body.Read(data); err == io.EOF {
+		size, err := res.Body.Read(data)
+		if err == io.EOF {
 			return
 		} else if err != nil {
 			log.Error().Err(err).Str("request id", job.Id).Str("worker host", w.host).Msg("Error reading tokens from LLM")
@@ -291,7 +292,7 @@ func (w *Worker) generate(job *Job) {
 			return
 		}
 
-		token := string(data)
+		token := string(data[:size])
 		if w.openai {
 			if token, err = w.openaiFilter(token); err == io.EOF {
 				return
@@ -332,7 +333,7 @@ func (w *Worker) prompt(ctx context.Context, payload []byte) (*http.Response, er
 	}
 
 	req.Header.Set("Cache-Control", "no-cache")
-	req.Header.Set("Accept", "text/event-stream")
+	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Connection", "keep-alive")
 
 	for h, v := range w.headers {

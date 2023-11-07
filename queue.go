@@ -70,6 +70,7 @@ func (q *Queue) get(id string) *QueueItem {
 	if !ok {
 		return nil
 	}
+
 	switch qi := qi.(type) {
 	case QueueItem:
 		return &qi
@@ -101,6 +102,7 @@ func (sf *StarFleet) handleQueue(w http.ResponseWriter, r *http.Request) {
 
 	if qi == nil {
 		http.Error(w, "ID is not queued", http.StatusBadRequest)
+		return
 	}
 
 	ahead := qi.ahead - (q.iter - qi.iter)
